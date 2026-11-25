@@ -1,0 +1,15 @@
+# A Git repository uses ignore patterns at its root. Keep env files, local DBs, caches and builds out of commits.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules/
+**/dist/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+*.db
+*.sqlite
+.DS_Store

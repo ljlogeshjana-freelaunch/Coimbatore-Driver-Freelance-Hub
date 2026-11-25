@@ -1,36 +1,58 @@
 # Coimbatore Driver & Freelance Hub
 
-A connected customer website, driver-first installable PWA, and administrator workspace backed by a FastAPI REST API and PostgreSQL/Supabase.
+Responsive React/Vite website and installable driver PWA backed by a FastAPI API and PostgreSQL/Supabase Auth.
 
-## Repository structure
-- `frontend/` React, TypeScript, Vite, Tailwind, Framer Motion and Lucide UI; customer, driver and admin workspaces share one app.
-- `backend/` FastAPI, SQLAlchemy, Pydantic, JWT authorization, duty timer and Decimal billing.
-- `supabase/migrations/` database schema, constraints, indexes and RLS policies.
+## Applications and routes
+- `/` public landing page
+- `/drivers` customer driver booking form and database pricing
+- `/freelance` service enquiry form, persisted through the API and WhatsApp follow-up
+- `/login` Supabase registration, sign-in, email verification, and password reset
+- `/account` customer driver bookings and freelance enquiry history
+- `/driver` driver assigned bookings, accept/decline and server-authoritative duty timer
+- `/earnings` completed driver shifts and earnings
+- `/admin` admin metrics, driver approvals, assignment, pricing, freelance status and login history
 
-## Requirements
-- Node.js 20+ and npm
-- Python 3.11+
-- PostgreSQL or Supabase project
-- Supabase Auth project (JWT signing secret configured for API verification)
+## Architecture
+`frontend/src/App.tsx` provides responsive route/page UI. `frontend/src/lib/api.ts` attaches Supabase access tokens to the REST calls. FastAPI verifies tokens with Supabase JWKS (preferred) or legacy HS256 config, persists API entities with SQLAlchemy and applies role authorization on protected endpoints. Supabase migrations define database schema/RLS; the API uses a private PostgreSQL connection. Browser code uses only Supabase URL and publishable anon key.
 
 ## Local development
-1. Copy `backend/.env.example` to `backend/.env`, fill in database URL and the Supabase JWT secret. Never commit secrets.
-2. Start the API: `cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && uvicorn app.main:app --reload`.
-3. Apply `supabase/migrations/0001_platform.sql` to your PostgreSQL/Supabase database.
-4. Start the web/PWA: `cd frontend && npm install && cp .env.example .env && npm run dev`.
-5. Create accounts through Supabase Auth; the frontend posts onboarding to the API. Only `ljlogeshjana@gmail.com` receives the administrator role, on the server. Driver accounts remain pending until admin approval.
+Prerequisites: Node.js 20+, Python 3.11+, PostgreSQL/Supabase for integrated auth. Copy environment templates and configure values.
 
-## Security and integrations
-Supabase Auth issues the access token; the API validates its signature, issuer, expiration, and subject using `SUPABASE_JWT_SECRET`. Configure Supabase Auth to use the matching HS256 signing secret, or extend the verifier for your project's asymmetric signing keys. The API independently enforces roles on every protected endpoint. Database RLS is included as defense in depth; use Supabase's `auth.uid()` claims when accessing tables directly through Supabase clients. The application API uses a restricted database connection and never accepts a user-supplied role as authorization.
+```sh
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload
+```
 
-Email delivery is optional until `RESEND_API_KEY` is configured. WhatsApp actions use `wa.me` links with separate numbers and contextual messages. Commercial prices are intentionally unconfigured and must be entered by an administrator. Configure Vercel with `VITE_API_URL`; deploy the backend to Render with `DATABASE_URL`, `SUPABASE_JWT_SECRET`, and `CORS_ORIGINS`.
+In another terminal:
 
-## Duty billing
-The API stores UTC timestamps and calculates elapsed, non-paused time on the server. Partial minutes round upward. Billing uses Decimal package price/duration, the selected package's rate for all active minutes, and the acting-driver surcharge; final total rounds half-up to two decimals. Browser timers are display-only and recover by fetching the active session after reload/reconnection. Timer actions are state-checked and audited.
+```sh
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
 
-## Tests and API docs
-- Backend: `cd backend && pip install -r requirements.txt && pytest`
-- Frontend production build: `cd frontend && npm install && npm run build`
-- OpenAPI docs: `http://localhost:8000/docs`
+For local API-only exploration SQLite creates its ORM tables on startup. A Supabase Auth account and valid JWT config are needed for protected endpoint integration. Do not use the SQLite default in production.
 
-Tests should be run in the target environment before deployment. No external credentials or live email/WhatsApp delivery are included in this repository.
+## Database and security setup
+Apply `supabase/migrations/0001_platform.sql`, `0002_application_completion.sql`, and `0003_freelance_schema_compat.sql` in order to a new Supabase database. The SQL migration is additive. RLS denies direct browser access except owner-scoped reads/profile operations and public pricing read. Do not configure frontend service-role credentials. The backend accesses PostgreSQL through a server-only `DATABASE_URL`; keep that credential restricted and private. Set backend Supabase issuer and JWKS URL to your project's values.
+
+Admin role bootstrap is from the verified JWT email matching `ADMIN_EMAIL` (`ljlogeshjana@gmail.com` by default), never user metadata. Driver signup only creates a pending application; the API requires approval for driver endpoints. Production CORS requires explicit origins.
+
+## Email and WhatsApp
+Resend admin notifications are sent only when `RESEND_API_KEY` and a verified `EMAIL_FROM` are configured. Supabase Auth email confirmation and password recovery email need an SMTP provider configured in Supabase; configure Resend SMTP there if desired. WhatsApp click-to-chat links open the user's WhatsApp app/web; the user must press Send. These are not delivery receipts.
+
+## Checks
+```sh
+cd backend && pytest
+cd frontend && npm install && npm run build
+```
+
+No local terminal execution was available when this repository update was prepared, so these commands must be run in your workspace/CI before production. External provider integrations also require your project credentials.
+
+## Deployment
+See `DEPLOYMENT.md` and `ENVIRONMENT_VARIABLES.md`. Vercel root is `frontend`, build `npm run build`, output `dist`. Render uses root `backend`, requirements install, and `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Set Supabase URL/anon key/API URL in Vercel; set Postgres URL, JWT verification, explicit CORS, environment, and optional Resend secrets in Render. Set Supabase Auth Site URL and redirect allowlist after obtaining the Vercel URL.

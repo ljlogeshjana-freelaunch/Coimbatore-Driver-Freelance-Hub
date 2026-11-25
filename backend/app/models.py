@@ -1,15 +1,17 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Integer, Text, Index
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-class Base(DeclarativeBase): pass
+class Base(DeclarativeBase):
+    pass
 
-def utcnow(): return datetime.now(timezone.utc)
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # Supabase auth UUID
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     role: Mapped[str] = mapped_column(String(20), default="customer")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -32,8 +34,8 @@ class PricingPackage(Base):
     category: Mapped[str] = mapped_column(String(24), index=True)
     name: Mapped[str] = mapped_column(String(80))
     duration_minutes: Mapped[int] = mapped_column(Integer)
-    price: Mapped[Decimal] = mapped_column(Numeric(10,2))
-    surcharge: Mapped[Decimal] = mapped_column(Numeric(10,2), default=Decimal("50.00"))
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    surcharge: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("50.00"))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 class Booking(Base):
@@ -56,6 +58,7 @@ class Assignment(Base):
     booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), index=True)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.user_id"), index=True)
     status: Mapped[str] = mapped_column(String(24), default="assigned")
+    __table_args__ = (Index("uq_assignment_booking_driver", "booking_id", "driver_id", unique=True),)
 
 class DutySession(Base):
     __tablename__ = "driver_duty_sessions"
@@ -69,7 +72,9 @@ class DutySession(Base):
     paused_seconds: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(16), default="active")
     billable_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(10,2), nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+
+Index("ix_duty_one_open_per_driver", DutySession.driver_id, unique=True, postgresql_where=DutySession.ended_at.is_(None))
 
 class DutyEvent(Base):
     __tablename__ = "duty_events"
@@ -96,4 +101,22 @@ class LoginActivity(Base):
     account_type: Mapped[str] = mapped_column(String(20))
     logged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-Index("ix_duty_one_open_per_driver", DutySession.driver_id, unique=True, postgresql_where=DutySession.ended_at.is_(None))
+class FreelancingRequest(Base):
+    __tablename__ = "freelancing_requests"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    service: Mapped[str] = mapped_column(String(120))
+    customer_name: Mapped[str] = mapped_column(String(160))
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    details: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(24), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(Text)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -3,15 +3,15 @@
 ## 1. Supabase
 1. Create a Supabase project and set Authentication → Providers → Email to enabled.
 2. In Authentication → URL Configuration, set the Site URL to the deployed Vercel origin. Add local `http://localhost:5173/**`, the production frontend origin and any trusted Vercel preview patterns to Redirect URLs.
-3. Apply migrations in order from `supabase/migrations/` using the SQL editor or Supabase CLI. Do not rerun an already applied migration manually if it is not idempotent.
+3. Apply migrations `0001` through `0004` in order from `supabase/migrations/` using the SQL editor or Supabase CLI. Do not rerun an already applied migration manually if it is not idempotent.
 4. Copy the project URL and publishable/anon key into Vercel. Never expose the database password, JWT signing secret, or service-role key to the browser.
 5. For backend token verification, set `SUPABASE_ISSUER` and either `SUPABASE_JWKS_URL` (recommended for asymmetric signing keys) or `SUPABASE_JWT_SECRET` for HS256 projects. Use the signing-key configuration actually active in your project.
 
 ## 2. Render backend
-1. Connect the repository to Render and use the included `render.yaml` Blueprint, or create a Python web service with root directory `backend`.
+1. Connect the repository to Render and use the included `render.yaml` Blueprint, or create a Python web service with root directory `backend`. The Blueprint pins Python 3.12.10 for the PostgreSQL driver.
 2. Build command: `pip install -r requirements.txt`.
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-4. Set `DATABASE_URL`, `SUPABASE_ISSUER`, `SUPABASE_JWKS_URL` or `SUPABASE_JWT_SECRET`, `CORS_ORIGINS`, `ENVIRONMENT=production`, `FRONTEND_URL`. Add `RESEND_API_KEY` and `EMAIL_FROM` only when verified sender is ready.
+4. Set `DATABASE_URL`, `SUPABASE_ISSUER`, exactly one of `SUPABASE_JWKS_URL` or `SUPABASE_JWT_SECRET`, `CORS_ORIGINS`, `ADMIN_EMAIL`, `ENVIRONMENT=production`, and `FRONTEND_URL`. Add `RESEND_API_KEY` and `EMAIL_FROM` only when a verified sender is ready. Production startup rejects SQLite, missing JWT configuration/issuer, local CORS origins, and incomplete Resend configuration.
 5. Apply SQL migrations before serving traffic. Health check path: `/health`.
 6. Use exact origins, e.g. `https://your-site.vercel.app`; add preview origins only if intentionally supported.
 

@@ -29,6 +29,17 @@ app = FastAPI(title="Coimbatore Driver & Freelance Hub API", version="1.1.0", de
 origins = [x.strip() for x in settings.cors_origins.split(",") if x.strip()]
 if settings.environment == "production" and (not origins or "*" in origins):
     raise RuntimeError("CORS_ORIGINS must contain explicit production origins; wildcard CORS is not allowed")
+if settings.environment == "production":
+    if settings.database_url.startswith("sqlite"):
+        raise RuntimeError("DATABASE_URL must use PostgreSQL in production")
+    if not settings.supabase_issuer:
+        raise RuntimeError("SUPABASE_ISSUER is required in production")
+    if bool(settings.supabase_jwks_url) == bool(settings.supabase_jwt_secret):
+        raise RuntimeError("Configure exactly one of SUPABASE_JWKS_URL or SUPABASE_JWT_SECRET")
+    if any("localhost" in origin or "127.0.0.1" in origin for origin in origins):
+        raise RuntimeError("CORS_ORIGINS must not include local origins in production")
+    if settings.resend_api_key and not settings.email_from:
+        raise RuntimeError("EMAIL_FROM is required when RESEND_API_KEY is configured")
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
 bearer = HTTPBearer(auto_error=False)
 jwks_client = PyJWKClient(settings.supabase_jwks_url) if settings.supabase_jwks_url else None
@@ -168,6 +179,10 @@ def health():
         logger.exception("Health check database connection failed")
         raise HTTPException(503, "Database unavailable") from exc
 
+@app.get("/api/me")
+def me(user: User = Depends(current_user)):
+    return {"id": user.id, "email": user.email, "role": user.role}
+
 @app.post("/api/onboarding")
 def onboarding(data: Onboard, user: User = Depends(current_user), db: Session = Depends(get_db)):
     profile = db.get(Profile, user.id)
@@ -197,9 +212,12 @@ def login_event(user: User = Depends(current_user), db: Session = Depends(get_db
     return {"recorded": True}
 
 @app.get("/api/pricing")
-def pricing(db: Session = Depends(get_db)):
-    rows = db.scalars(select(PricingPackage).where(PricingPackage.enabled.is_(True)).order_by(PricingPackage.category, PricingPackage.duration_minutes)).all()
-    return [dict(id=p.id, category=p.category, name=p.name, duration_minutes=p.duration_minutes, price=str(p.price), surcharge=str(p.surcharge)) for p in rows]
+def pricing(user: User | None = Depends(optional_user), db: Session = Depends(get_db)):
+    query = select(PricingPackage)
+    if not user or user.role != "admin":
+        query = query.where(PricingPackage.enabled.is_(True))
+    rows = db.scalars(query.order_by(PricingPackage.category, PricingPackage.duration_minutes)).all()
+    return [dict(id=p.id, category=p.category, name=p.name, duration_minutes=p.duration_minutes, price=str(p.price), surcharge=str(p.surcharge), enabled=p.enabled) for p in rows]
 
 @app.post("/api/bookings", status_code=201)
 def create_booking(data: BookingIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -231,7 +249,22 @@ def bookings(user: User = Depends(current_user), db: Session = Depends(get_db)):
         driver = db.get(Driver, user.id)
         if not driver or not driver.approved:
             raise HTTPException(403, "Driver approval pending")
-        query = query.join(Assignment, Assignment.booking_id == Booking.id).where(Assignment.driver_id == user.id, Assignment.status != "rejected")
+        rows = db.execute(
+            select(Booking, Assignment)
+            .join(Assignment, Assignment.booking_id == Booking.id)
+            .where(Assignment.driver_id == user.id, Assignment.status != "rejected")
+            .order_by(Booking.created_at.desc())
+            .limit(200)
+        ).all()
+        return [
+            dict(
+                id=b.id, pickup=b.pickup, destination=b.destination,
+                travel_at=b.travel_at.isoformat(), trip_type=b.trip_type,
+                category=b.category, status=b.status, package_id=b.package_id,
+                assignment_id=a.id, assignment_status=a.status,
+            )
+            for b, a in rows
+        ]
     elif user.role != "admin":
         raise HTTPException(403, "Forbidden")
     rows = db.scalars(query.order_by(Booking.created_at.desc()).limit(200)).all()
@@ -252,7 +285,7 @@ def create_freelance_request(data: FreelanceIn, request: Request, user: User | N
     item = FreelancingRequest(customer_id=user.id if user else None, service=data.service, customer_name=data.customer_name.strip(), email=str(data.email), details=data.details.strip())
     db.add(item)
     db.flush()
-    db.add(AuditLog(actor_id=user.id if user else "public", action="freelance_request_created", entity_type="freelancing_request", entity_id=str(item.id)))
+    db.add(AuditLog(actor_id=user.id if user else None, action="freelance_request_created", entity_type="freelancing_request", entity_id=str(item.id)))
     db.commit()
     message = f"Freelance enquiry #{item.id}\nService: {item.service}\nName: {item.customer_name}\nEmail: {item.email}\nDetails: {item.details}"
     send_admin_notice(f"New freelance enquiry #{item.id}", message)
@@ -291,13 +324,20 @@ def login_history(admin: User = Depends(roles("admin")), db: Session = Depends(g
 
 @app.post("/api/admin/assign/{booking_id}/{driver_id}")
 def assign(booking_id: int, driver_id: str, admin: User = Depends(roles("admin")), db: Session = Depends(get_db)):
-    booking, driver = db.get(Booking, booking_id), db.get(Driver, driver_id)
+    booking = db.scalar(select(Booking).where(Booking.id == booking_id).with_for_update())
+    driver = db.get(Driver, driver_id)
     if not booking or not driver or not driver.approved:
         raise HTTPException(404, "Booking or approved driver not found")
+    if booking.status not in ("pending", "assigned"):
+        raise HTTPException(409, "Booking is not available for assignment")
+    active_assignment = db.scalar(select(Assignment).where(
+        Assignment.booking_id == booking_id,
+        Assignment.status.in_(("assigned", "accepted")),
+    ))
+    if active_assignment:
+        raise HTTPException(409, "Booking already has an active driver assignment")
     assignment = db.scalar(select(Assignment).where(Assignment.booking_id == booking_id, Assignment.driver_id == driver_id))
     if assignment:
-        if assignment.status != "rejected":
-            raise HTTPException(409, "Driver is already assigned")
         assignment.status = "assigned"
     else:
         assignment = Assignment(booking_id=booking_id, driver_id=driver_id, status="assigned")
@@ -335,12 +375,24 @@ def driver_assignment_action(assignment_id: int, action: str, user: User = Depen
     if action not in ("accept", "reject"):
         raise HTTPException(404, "Unknown assignment action")
     assignment = db.get(Assignment, assignment_id)
-    if not assignment or assignment.driver_id != user.id or assignment.status != "assigned":
+    if not assignment or assignment.driver_id != user.id:
+        raise HTTPException(404, "Pending assignment not found")
+    booking = db.scalar(select(Booking).where(Booking.id == assignment.booking_id).with_for_update())
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    db.refresh(assignment, with_for_update=True)
+    if not assignment or assignment.status != "assigned":
         raise HTTPException(404, "Pending assignment not found")
     assignment.status = "accepted" if action == "accept" else "rejected"
-    booking = db.get(Booking, assignment.booking_id)
-    if action == "reject" and booking:
-        booking.status = "pending"
+    if action == "reject":
+        remaining_assignment = db.scalar(select(Assignment.id).where(
+            Assignment.booking_id == booking.id,
+            Assignment.id != assignment.id,
+            Assignment.status.in_(("assigned", "accepted")),
+        ))
+        booking.status = "assigned" if remaining_assignment else "pending"
+    else:
+        booking.status = "assigned"
     db.add(AuditLog(actor_id=user.id, action=f"assignment_{action}", entity_type="assignment", entity_id=str(assignment.id)))
     db.commit()
     return {"status": assignment.status}
@@ -353,8 +405,8 @@ def driver_earnings(user: User = Depends(driver_user), db: Session = Depends(get
 @app.post("/api/duty/start")
 def start_duty(data: DutyAction, user: User = Depends(driver_user), db: Session = Depends(get_db)):
     booking = db.get(Booking, data.booking_id)
-    assignment = db.scalar(select(Assignment).where(Assignment.booking_id == data.booking_id, Assignment.driver_id == user.id, Assignment.status.in_(["assigned", "accepted"])))
-    if not booking or not assignment or booking.status not in ("assigned", "confirmed"):
+    assignment = db.scalar(select(Assignment).where(Assignment.booking_id == data.booking_id, Assignment.driver_id == user.id, Assignment.status == "accepted"))
+    if not booking or not assignment or booking.status != "assigned":
         raise HTTPException(400, "Booking is not assigned and ready")
     if db.scalar(select(DutySession.id).where(DutySession.driver_id == user.id, DutySession.ended_at.is_(None))):
         raise HTTPException(409, "An active duty already exists")
@@ -380,7 +432,7 @@ def active_duty(user: User = Depends(driver_user), db: Session = Depends(get_db)
 def duty_action(session_id: int, action: str, user: User = Depends(driver_user), db: Session = Depends(get_db)):
     if action not in ("pause", "resume", "end"):
         raise HTTPException(404, "Unknown duty action")
-    session = db.get(DutySession, session_id)
+    session = db.scalar(select(DutySession).where(DutySession.id == session_id).with_for_update())
     if not session or session.driver_id != user.id or session.ended_at:
         raise HTTPException(404, "Active session not found")
     now = utcnow()

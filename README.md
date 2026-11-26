@@ -16,7 +16,7 @@ Responsive React/Vite website and installable driver PWA backed by a FastAPI API
 `frontend/src/App.tsx` provides responsive route/page UI. `frontend/src/lib/api.ts` attaches Supabase access tokens to the REST calls. FastAPI verifies tokens with Supabase JWKS (preferred) or legacy HS256 config, persists API entities with SQLAlchemy and applies role authorization on protected endpoints. Supabase migrations define database schema/RLS; the API uses a private PostgreSQL connection. Browser code uses only Supabase URL and publishable anon key.
 
 ## Local development
-Prerequisites: Node.js 20+, Python 3.11+, PostgreSQL/Supabase for integrated auth. Copy environment templates and configure values.
+Prerequisites: Node.js 20+, Python 3.12+, PostgreSQL/Supabase for integrated auth. Copy environment templates and configure values.
 
 ```sh
 cd backend
@@ -39,7 +39,7 @@ npm run dev
 For local API-only exploration SQLite creates its ORM tables on startup. A Supabase Auth account and valid JWT config are needed for protected endpoint integration. Do not use the SQLite default in production.
 
 ## Database and security setup
-Apply `supabase/migrations/0001_platform.sql`, `0002_application_completion.sql`, and `0003_freelance_schema_compat.sql` in order to a new Supabase database. The SQL migration is additive. RLS denies direct browser access except owner-scoped reads/profile operations and public pricing read. Do not configure frontend service-role credentials. The backend accesses PostgreSQL through a server-only `DATABASE_URL`; keep that credential restricted and private. Set backend Supabase issuer and JWKS URL to your project's values.
+Apply `supabase/migrations/0001_platform.sql` through `0004_anonymous_audit_actor.sql` in order to a new Supabase database. The SQL migrations are additive. RLS denies direct browser access except owner-scoped reads/profile operations and public pricing read. Do not configure frontend service-role credentials. The backend accesses PostgreSQL through a server-only `DATABASE_URL`; keep that credential restricted and private. Set backend Supabase issuer and exactly one of the JWKS URL or JWT secret to your project's values.
 
 Admin role bootstrap is from the verified JWT email matching `ADMIN_EMAIL` (`ljlogeshjana@gmail.com` by default), never user metadata. Driver signup only creates a pending application; the API requires approval for driver endpoints. Production CORS requires explicit origins.
 
@@ -48,11 +48,11 @@ Resend admin notifications are sent only when `RESEND_API_KEY` and a verified `E
 
 ## Checks
 ```sh
-cd backend && pytest
-cd frontend && npm install && npm run build
+cd backend && python -m pytest -v
+cd frontend && npm ci && npm run build
 ```
 
-No local terminal execution was available when this repository update was prepared, so these commands must be run in your workspace/CI before production. External provider integrations also require your project credentials.
+GitHub Actions runs the backend tests and frontend production build on pushes to `main` and pull requests. Authentication, PostgreSQL, and provider integrations still require project credentials and deployed-service configuration.
 
 ## Deployment
 See `DEPLOYMENT.md` and `ENVIRONMENT_VARIABLES.md`. Vercel root is `frontend`, build `npm run build`, output `dist`. Render uses root `backend`, requirements install, and `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Set Supabase URL/anon key/API URL in Vercel; set Postgres URL, JWT verification, explicit CORS, environment, and optional Resend secrets in Render. Set Supabase Auth Site URL and redirect allowlist after obtaining the Vercel URL.

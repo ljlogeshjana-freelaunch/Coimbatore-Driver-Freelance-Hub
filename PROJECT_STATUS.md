@@ -10,11 +10,18 @@
 ## Security review findings
 - Frontend service-role secrets: none found in tracked frontend environment example; only public Supabase anon key is documented.
 - API role checks protect privileged routes; driver authorization requires approval; admin bootstrap depends on verified JWT email.
-- Production wildcard CORS is rejected. JWT verification supports asymmetric JWKS or HS256 secret.
+- Production wildcard/local CORS, SQLite, missing JWT issuer/verification config, and incomplete Resend config are rejected at startup. JWT verification supports asymmetric JWKS or HS256 secret.
 - Review caveat: RLS is defense in depth; API uses a direct private database connection and must keep that credential secret. RLS policy grants should be tested using real Supabase anon/authenticated roles.
 - Previous migration mismatch found: migration 0001 already creates a narrower freelance table, while the API required name/email fields. Added migration 0003 to add those columns without dropping existing data.
+- Aligned SQLAlchemy UUID/timezone mappings with PostgreSQL migrations and made public freelance audit actors nullable through migration 0004.
 
-## Not verified here
-- This GitHub repository integration provides file reads/writes, not an interactive local workspace or shell. No npm/pip install, frontend build, backend test, SQL migration execution, mobile device test, or external provider call was run in this session.
-- Supabase, Resend, Vercel, and Render account credentials/domains are not available. Configure them privately using `DEPLOYMENT.md` and `ENVIRONMENT_VARIABLES.md`.
-- Production readiness is not asserted until CI/local build and integration tests pass against configured services.
+## Verification
+- Backend: 9 tests passed on Python 3.12.10, including SQLite API workflows for driver onboarding, booking, assignment/accept/reject, duty lifecycle, freelance audit records, and admin pricing.
+- Frontend: `npm run build` passed; TypeScript and Vite production bundle succeeded.
+- Local integration: FastAPI health check returned `ok`; the frontend loaded all four seeded pricing packages through the local API. Mobile navigation opened without horizontal overflow in the browser's 450px viewport.
+- GitHub Actions workflow was added but has not run on GitHub because the current GitHub credentials rejected pushes with HTTP 403. Local `npm ci` also hit a Windows file lock; `npm install --ignore-scripts` restored dependencies and the build passed.
+
+## Still requires external services
+- Supabase Auth/JWT, PostgreSQL migrations/RLS, Resend delivery, and deployed Vercel/Render behavior were not tested: project credentials and deployed service URLs are unavailable.
+- Apply migrations `0001` through `0004` in Supabase and configure values privately as documented in `DEPLOYMENT.md` and `ENVIRONMENT_VARIABLES.md`.
+- Do not claim production readiness until the migrations, real auth/provider integration, and GitHub Actions run against configured services.

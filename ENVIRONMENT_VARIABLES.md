@@ -16,11 +16,11 @@ Never commit real secrets. Copy the relevant example file into a local, ignored 
 | Variable | Required | Description |
 |---|---:|---|
 | `DATABASE_URL` | Yes in production | SQLAlchemy URL for PostgreSQL, e.g. `postgresql+psycopg://...`. Local default is SQLite. |
-| `SUPABASE_JWT_SECRET` | One JWT option | Legacy HS256 signing secret, if your Supabase project uses it. Treat as a secret. |
-| `SUPABASE_JWKS_URL` | One JWT option | Asymmetric signing key endpoint, typically `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`. Prefer this for projects using asymmetric keys. |
-| `SUPABASE_ISSUER` | Recommended | `https://<project-ref>.supabase.co/auth/v1`. Must match the project token issuer. |
+| `SUPABASE_JWT_SECRET` | One JWT option | Legacy HS256 signing secret, if your Supabase project uses it. Treat as a secret. Configure this or `SUPABASE_JWKS_URL`, not both. |
+| `SUPABASE_JWKS_URL` | One JWT option | Asymmetric signing key endpoint, typically `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`. Prefer this for projects using asymmetric keys. Configure this or `SUPABASE_JWT_SECRET`, not both. |
+| `SUPABASE_ISSUER` | Yes in production | `https://<project-ref>.supabase.co/auth/v1`. Must match the project token issuer. |
 | `CORS_ORIGINS` | Yes in production | Comma-separated exact allowed frontend origins; no wildcard in production. |
-| `ADMIN_EMAIL` | No | The sole company administrator address; defaults to `ljlogeshjana@gmail.com`. |
+| `ADMIN_EMAIL` | Recommended | The sole company administrator address; defaults to `ljlogeshjana@gmail.com`. |
 | `RESEND_API_KEY` | Optional | Server-only Resend API key. If set, `EMAIL_FROM` is also required. |
 | `EMAIL_FROM` | Optional | Verified Resend sender, e.g. `Coimbatore Hub <notifications@example.com>`. |
 | `FRONTEND_URL` | Recommended | Production frontend URL for auth links. |
@@ -28,3 +28,5 @@ Never commit real secrets. Copy the relevant example file into a local, ignored 
 | `PORT` | Render supplies | Listening port; Render start command reads `$PORT`. |
 
 Resend sender domains must be verified with the provider. Password reset and email verification messages are issued by Supabase Auth; set the provider's SMTP settings if you want Supabase auth emails delivered through Resend. The API's Resend client sends booking, registration/login and freelance enquiry alerts to the configured admin email.
+
+Production backend startup requires a PostgreSQL `DATABASE_URL`, a matching issuer and one JWT verification method, and explicit non-local CORS origins. If Resend is enabled, configure both `RESEND_API_KEY` and `EMAIL_FROM`.

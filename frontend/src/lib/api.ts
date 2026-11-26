@@ -6,6 +6,7 @@ export const supabase = url && key && !url.includes('your-project')
   ? createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
   : null;
 export const apiBase = (import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '')).replace(/\/$/, '');
+export const appUrl = (path: string) => `${window.location.origin}${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!apiBase) throw new Error('Backend API is not configured. Set VITE_API_URL and rebuild the frontend.');

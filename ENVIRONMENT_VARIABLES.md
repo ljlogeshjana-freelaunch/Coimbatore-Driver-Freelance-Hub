@@ -11,6 +11,8 @@ Never commit real secrets. Copy the relevant example file into a local, ignored 
 | `VITE_SUPABASE_ANON_KEY` | Yes for authentication | Supabase publishable/anon key; safe for browser use when RLS is configured. Never put service-role keys here. |
 | `VITE_APP_URL` | Recommended | Canonical frontend origin used for auth redirect setup. |
 
+For the GitHub Pages workflow, configure these three values as repository Actions variables. `VITE_API_URL` must be the real deployed FastAPI origin; the build intentionally does not guess a Render hostname. The Supabase anon/publishable key is public by design. Do not configure any server-side secrets as `VITE_*` variables.
+
 ## Backend (`backend/.env.example`)
 
 | Variable | Required | Description |

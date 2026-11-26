@@ -2,9 +2,9 @@
 
 ## 1. Supabase
 1. Create a Supabase project and set Authentication → Providers → Email to enabled.
-2. In Authentication → URL Configuration, set the Site URL to the deployed Vercel origin. Add local `http://localhost:5173/**`, the production frontend origin and any trusted Vercel preview patterns to Redirect URLs.
+2. In Authentication → URL Configuration, set the Site URL to the production frontend URL. Add local `http://localhost:5173/**`, the deployed frontend's login callback URL, and any trusted preview patterns to Redirect URLs.
 3. Apply migrations `0001` through `0004` in order from `supabase/migrations/` using the SQL editor or Supabase CLI. Do not rerun an already applied migration manually if it is not idempotent.
-4. Copy the project URL and publishable/anon key into Vercel. Never expose the database password, JWT signing secret, or service-role key to the browser.
+4. Copy the project URL and publishable/anon key into the selected frontend host (Vercel environment variables or GitHub Actions repository variables). Never expose the database password, JWT signing secret, or service-role key to the browser.
 5. For backend token verification, set `SUPABASE_ISSUER` and either `SUPABASE_JWKS_URL` (recommended for asymmetric signing keys) or `SUPABASE_JWT_SECRET` for HS256 projects. Use the signing-key configuration actually active in your project.
 
 ## 2. Render backend
@@ -22,9 +22,17 @@
 4. Vite SPA fallback is configured in `frontend/vercel.json`; verify direct navigation to `/drivers`, `/login`, `/account`, `/driver`, and `/admin`.
 5. Once the domain is known, set Supabase Site URL/redirect URLs and update Render `CORS_ORIGINS`.
 
-## 4. Local testing
+## 4. GitHub Pages frontend
+1. The existing project Pages URL is `https://ljlogeshjana-freelaunch.github.io/Coimbatore-Driver-Freelance-Hub/`. The `pages.yml` workflow publishes only `frontend/dist`; it never publishes the repository README.
+2. In repository Settings → Pages, select **GitHub Actions** as the build and deployment source if it is not already selected.
+3. Add repository Actions variables `VITE_API_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`. These must be the actual deployed API origin, Supabase project URL, and public anon/publishable key. Never add a database password, service-role key, JWT secret, or Resend key to frontend build variables.
+4. The Pages build uses the repository subpath as its Vite base, sets React Router's basename, and publishes `dist/404.html` so direct route loads and refreshes reach the SPA.
+5. Add `https://ljlogeshjana-freelaunch.github.io/Coimbatore-Driver-Freelance-Hub/login` to Supabase Auth's allowed redirect URLs. Set Render `CORS_ORIGINS` to the frontend origin `https://ljlogeshjana-freelaunch.github.io` (origins do not include paths).
+6. Confirm the Pages Actions run succeeds and that `/health` responds from the configured API before treating booking/auth features as live.
+
+## 5. Local testing
 Backend: `cd backend && python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && pytest`.
 Frontend: `cd frontend && npm install && npm run build`.
 
-## 5. Production checks
+## 6. Production checks
 Create a customer and driver account; verify the driver's approval gate. Use the company admin email to bootstrap the admin role only after email authentication is configured. Submit a booking, manually assign an approved driver, accept it, exercise pause/resume/end, verify invoice amount and customer history. Submit freelance enquiry and check provider logs/admin inbox. Validate CORS, auth redirects, real mobile PWA install, and backups. Email sending is not confirmed unless Resend responds successfully.

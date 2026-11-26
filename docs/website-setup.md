@@ -11,10 +11,12 @@
 
 ## Connect services
 1. Deploy the FastAPI backend and configure its database and Supabase JWT verification values as in `backend/.env.example`.
-2. In Vercel set `VITE_API_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`. The anon key is intended for browser use; never use the Supabase service-role key in the frontend.
+2. In the frontend host set `VITE_API_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY` (Vercel environment variables or GitHub Actions repository variables). The anon key is intended for browser use; never use the Supabase service-role key in the frontend.
 3. Configure Supabase Auth email/password and the redirect URLs for the deployed domain. Configure API JWT validation to match the project's signing algorithm and issuer.
 4. Apply Supabase migrations `0001` through `0004` in order. The first migration seeds non-commercial packages. Configure commercial rates only after administrator review.
 5. Set the API CORS origins to the exact Vercel production and preview domains required.
+
+The GitHub Pages workflow publishes only `frontend/dist` at `https://ljlogeshjana-freelaunch.github.io/Coimbatore-Driver-Freelance-Hub/`. Set repository Actions variables `VITE_API_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY` to the real deployed public endpoints/anon key. GitHub Pages hosts no API or database; keep FastAPI on Render and PostgreSQL/Supabase private. Its CORS origin is `https://ljlogeshjana-freelaunch.github.io` (without the repository path).
 
 Driver duty displays a client-side elapsed-time estimate for convenience, but only API/server timestamps are used to calculate the final invoice. Install the driver app using the browser's Add to Home Screen/Install action. Verify PWA install behavior, mobile layouts, keyboard access, account confirmation and API connectivity on real devices before launch.
 

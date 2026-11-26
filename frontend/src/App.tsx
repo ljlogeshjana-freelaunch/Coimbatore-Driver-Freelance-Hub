@@ -1,4 +1,4 @@
-import React, { FormEvent, createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, createContext, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowRight, BriefcaseBusiness, CalendarDays, CarFront, Check, ChevronRight, Clock3, LogIn, Menu, MessageCircle, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { api, supabase, whatsappHref } from './lib/api';

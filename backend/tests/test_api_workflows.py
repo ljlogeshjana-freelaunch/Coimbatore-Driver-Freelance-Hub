@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app import main
-from app.models import AuditLog, Base, Driver, PricingPackage, User
+from app.models import AuditLog, Base, Booking, Driver, PricingPackage, User
 
 
 @pytest.fixture
@@ -190,3 +190,40 @@ def test_admin_can_list_disabled_pricing_but_public_list_hides_it(api_client):
     admin_packages = client.get("/api/pricing")
     assert admin_packages.status_code == 200
     assert next(item for item in admin_packages.json() if item["id"] == 1)["enabled"] is False
+
+
+def test_customer_can_book_four_non_commercial_passengers(api_client):
+    client, session_factory, identity = api_client
+    customer = create_user(session_factory, role="customer", email="customer@example.com")
+    identity["user"] = customer
+
+    packages = client.get("/api/pricing").json()
+    package = next(item for item in packages if item["category"] == "non_commercial")
+    payload = booking_payload()
+    payload["package_id"] = package["id"]
+    payload["requirements"] = "Passengers: 4; luggage: 4 bags"
+
+    response = client.post("/api/bookings", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+    with session_factory() as db:
+        booking = db.get(Booking, response.json()["id"])
+        assert booking is not None
+        assert booking.customer_id == customer.id
+        assert booking.category == "non_commercial"
+        assert booking.package_id == package["id"]
+        assert booking.requirements == "Passengers: 4; luggage: 4 bags"
+
+
+def test_customer_booking_rejects_package_from_another_category(api_client):
+    client, session_factory, identity = api_client
+    customer = create_user(session_factory, role="customer", email="customer@example.com")
+    identity["user"] = customer
+    payload = booking_payload()
+    payload["category"] = "commercial"
+
+    response = client.post("/api/bookings", json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Select an available package in the chosen category"

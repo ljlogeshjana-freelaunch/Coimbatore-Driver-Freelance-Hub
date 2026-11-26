@@ -16,7 +16,7 @@ Responsive React/Vite website and installable driver PWA backed by a FastAPI API
 `frontend/src/App.tsx` provides responsive route/page UI. `frontend/src/lib/api.ts` attaches Supabase access tokens to the REST calls. FastAPI verifies tokens with Supabase JWKS (preferred) or legacy HS256 config, persists API entities with SQLAlchemy and applies role authorization on protected endpoints. Supabase migrations define database schema/RLS; the API uses a private PostgreSQL connection. Browser code uses only Supabase URL and publishable anon key.
 
 ## Local development
-Prerequisites: Node.js 20+, Python 3.12+, PostgreSQL/Supabase for integrated auth. Copy environment templates and configure values.
+Prerequisites: Node.js 22+, Python 3.12+, PostgreSQL/Supabase for integrated auth. Copy environment templates and configure values.
 
 ```sh
 cd backend
